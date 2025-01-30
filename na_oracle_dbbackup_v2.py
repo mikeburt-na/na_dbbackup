@@ -294,7 +294,7 @@ def clone_lun(args) -> None:
                     resourcelun.igroup = {"name": igroup}
                     resourcelun.lun = {"name": lun.name}
                     if resourcelun.post(hydrate=True):
-                        print("Clone LUN " + resourcelun.lun + " Mapped to " + igroup + " Successfully.")
+                        print("Clone LUN " + lun.name + " Mapped to " + igroup + " Successfully.")
     except NetAppRestError as error:
         print("Exception caught :" + str(error))
 

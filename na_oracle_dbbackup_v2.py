@@ -264,29 +264,37 @@ def clone_lun(args) -> None:
         igroup_name = [igroup_name]
 
     snapshot_name = args.snapshot
-    
+
     now = datetime.now()
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
 
     try:
+        print()
+        print("Oracle DB Backup LUN(s) Clone Creation Request Successful:")
+        print("Snapshot: " + snapshot_name)
+        print("SVM: " + svm_name)
+        print("Parent Volume: " + volume_name)
+        print("Clone: " + clone_name_auto)
+        print("iGroup: " + igroup_name)
+        print("======================================================================")
+
         for vol in volume_name:
             resourcevol = Volume()
             resourcevol.name = clone_name_auto
             resourcevol.clone = {"parent_volume": {"name": vol},"parent_snapshot": {"name": snapshot_name}, "is_flexclone": "true"}
             resourcevol.svm = {"name": svm_name}
-            resourcevol.post(hydrate=True)
-            print(resourcevol.name)
+            if resourcevol.post(hydrate=True):
+                print("Volume Clone " + resourcevol.name + " Created Successfully.")
             for lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
-                print(lun.name)
+                #print(lun.name)
                 for igroup in igroup_name:
                     resourcelun = LunMap()
                     resourcelun.svm = {"name": svm_name}
                     resourcelun.igroup = {"name": igroup}
                     resourcelun.lun = {"name": lun.name}
-                    resourcelun.post(hydrate=True)
-                    print(resourcelun.lun)
-                    print(igroup)
+                    if resourcelun.post(hydrate=True):
+                        print("Clone LUN " + resourcelun.lun + " Mapped to " + igroup + " Successfully.")
     except NetAppRestError as error:
         print("Exception caught :" + str(error))
 

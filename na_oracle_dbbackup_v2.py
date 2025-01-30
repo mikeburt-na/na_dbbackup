@@ -274,9 +274,9 @@ def clone_lun(args) -> None:
         print("Oracle DB Backup LUN(s) Clone Creation Request Successful:")
         print("Snapshot: " + snapshot_name)
         print("SVM: " + svm_name)
-        print("Parent Volume: " + volume_name)
+        print("Parent Volume: " + ', '.join(volume_name))
         print("Clone: " + clone_name_auto)
-        print("iGroup: " + igroup_name)
+        print("iGroup: " + ', '.join(igroup_name))
         print("======================================================================")
 
         for vol in volume_name:

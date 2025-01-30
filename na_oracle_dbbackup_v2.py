@@ -254,10 +254,17 @@ def delete_clone(args) -> None:
 def clone_lun(args) -> None:
     """Clone Volume, Update LUN Serial, and Map LUN"""
     svm_name = args.cluster
+    
     volume_name = args.volume_name
-    vol_uuid = get_key_volume(svm_name, volume_name)
+    if not isinstance(volume_name, list):
+        volume_name = [volume_name]
+
     igroup_name = args.igroup_name
+    if not isinstance(igroup_name, list):
+        igroup_name = [igroup_name]
+
     snapshot_name = args.snapshot
+    
     now = datetime.now()
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string

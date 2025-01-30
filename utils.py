@@ -83,6 +83,10 @@ def parse_args(
         "-d",
         "--clone_name",
         help="Volume Clone Name")
+    parser.add_argument(
+        "-i",
+        "--igroup_name",
+        help="iGroup Name")
     parsed_args = parser.parse_args()
 
     # collect the password without echo if not already provided

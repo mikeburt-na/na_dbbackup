@@ -262,23 +262,26 @@ def clone_lun(args) -> None:
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
 
-    for vol in volume_name:
-        resourcevol = Volume()
-        resourcevol.name = clone_name_auto
-        resourcevol.clone = {"parent_volume": {"name": vol},"parent_snapshot": {"name": snapshot_name}, "is_flexclone": "true"}
-        resourcevol.svm = {"name": svm_name}
-        resourcevol.post(hydrate=True)
-        print(resourcevol.name)
-        for lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
-            print(lun.name)
-            for igroup in igroup_name:
-                resourcelun = LunMap()
-                resourcelun.svm = {"name": svm_name}
-                resourcelun.igroup = {"name": igroup}
-                resourcelun.lun = {"name": lun.name}
-                resourcelun.post(hydrate=True)
-                print(resourcelun.lun)
-                print(igroup)
+    try:
+        for vol in volume_name:
+            resourcevol = Volume()
+            resourcevol.name = clone_name_auto
+            resourcevol.clone = {"parent_volume": {"name": vol},"parent_snapshot": {"name": snapshot_name}, "is_flexclone": "true"}
+            resourcevol.svm = {"name": svm_name}
+            resourcevol.post(hydrate=True)
+            print(resourcevol.name)
+            for lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
+                print(lun.name)
+                for igroup in igroup_name:
+                    resourcelun = LunMap()
+                    resourcelun.svm = {"name": svm_name}
+                    resourcelun.igroup = {"name": igroup}
+                    resourcelun.lun = {"name": lun.name}
+                    resourcelun.post(hydrate=True)
+                    print(resourcelun.lun)
+                    print(igroup)
+    except NetAppRestError as error:
+        print("Exception caught :" + str(error))
 
 
 def snapshot_ops(args) -> None:

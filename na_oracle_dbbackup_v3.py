@@ -290,8 +290,10 @@ def clone_lun(args) -> None:
             
             # Grab the parent LUN serial numbers and update the clone LUNs
             for parent_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + vol + "**"}):
-                parent_lun.get()  # Refresh the parent LUN object
+                if parent_lun.get():  # Refresh the parent LUN object
+                    print("LUN Refresh for S/N Completed")
                 parent_serial_number = parent_lun.serial_number
+                print(parent_serial_number)
                 for clone_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
                     clone_lun.get()  # Refresh the clone LUN object
                     clone_lun.state = 'offline'

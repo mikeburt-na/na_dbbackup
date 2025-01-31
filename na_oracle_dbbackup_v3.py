@@ -270,7 +270,7 @@ def clone_lun(args) -> None:
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
 
     try:
-        print()
+        print("======================================================================")
         print("Oracle DB Backup LUN(s) Clone Creation Request Successful:")
         print("Snapshot: " + snapshot_name)
         print("SVM: " + svm_name)
@@ -286,24 +286,45 @@ def clone_lun(args) -> None:
             resourcevol.clone = {"parent_volume": {"name": vol},"parent_snapshot": {"name": snapshot_name}, "is_flexclone": "true"}
             resourcevol.svm = {"name": svm_name}
             if resourcevol.post(hydrate=True):
+                print("======================================================================")
                 print("Volume Clone " + resourcevol.name + " Created Successfully.")
-            
+                print("======================================================================")
             # Grab the parent LUN serial numbers and update the clone LUNs
             for parent_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + vol + "**"}):
                 if parent_lun.get():  # Refresh the parent LUN object
+                    parent_serial_number = parent_lun.serial_number
+                    print("======================================================================")
                     print("LUN Refresh for S/N Completed")
-                parent_serial_number = parent_lun.serial_number
-                print(parent_serial_number)
+                    print("Parent LUN S/N: " + parent_serial_number)
+                    print("======================================================================")
                 for clone_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
-                    clone_lun.get()  # Refresh the clone LUN object
+                    if clone_lun.get():  # Refresh the clone LUN object
+                        clone_serial_number = clone_lun.serial_number
+                        print("======================================================================")
+                        print("Clone LUN S/N Refresh Completed")
+                        print("Clone LUN S/N: " + clone_serial_number)
+                        print("======================================================================")
                     clone_lun.state = 'offline'
                     if clone_lun.patch():
-                        print("LUN Offline Complete")
-                    clone_lun.get()  # Refresh the clone LUN object
+                        print("======================================================================")
+                        print("Clone LUN Offline Complete")
+                        print("======================================================================")
+                    if clone_lun.get():  # Refresh the clone LUN object
+                        clone_lun_state = clone_lun.state
+                        print("======================================================================")
+                        print("Clone LUN State: " + clone_lun_state)
+                        print("======================================================================")
                     clone_lun.serial_number = parent_serial_number
                     if clone_lun.patch():
-                        print("LUN S/N Updated")
-                    clone_lun.get()  # Refresh the clone LUN object
+                        print("======================================================================")
+                        print("Clone LUN S/N Updated to Parent LUN S/N")
+                        print("======================================================================")
+                    if clone_lun.get():  # Refresh the clone LUN object
+                        clone_serial_number = clone_lun.serial_number
+                        print("======================================================================")
+                        print("Clone LUN S/N Refresh Completed")
+                        print("Clone LUN S/N: " + clone_serial_number)
+                        print("======================================================================")
                     clone_lun.state = 'online'
                     if clone_lun.patch():
                         print("LUN Online")

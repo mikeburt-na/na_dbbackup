@@ -304,13 +304,13 @@ def clone_lun(args) -> None:
                         print("Clone LUN S/N Refresh Completed")
                         print("Clone LUN S/N: " + clone_serial_number)
                         print("======================================================================")
-                    clone_lun.state = 'offline'
+                    clone_lun.status.state = 'offline'
                     if clone_lun.patch():
                         print("======================================================================")
                         print("Clone LUN Offline Complete")
                         print("======================================================================")
                     if clone_lun.get():  # Refresh the clone LUN object
-                        clone_lun_state = clone_lun.state
+                        clone_lun_state = clone_lun.status.state
                         print("======================================================================")
                         print("Clone LUN State: " + clone_lun_state)
                         print("======================================================================")

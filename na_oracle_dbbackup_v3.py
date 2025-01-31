@@ -297,10 +297,16 @@ def clone_lun(args) -> None:
                 for clone_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
                     clone_lun.get()  # Refresh the clone LUN object
                     clone_lun.state = 'offline'
-                    clone_lun.patch()
+                    if clone_lun.patch():
+                        print("LUN Offline Complete")
+                    clone_lun.get()  # Refresh the clone LUN object
                     clone_lun.serial_number = parent_serial_number
+                    if clone_lun.patch():
+                        print("LUN S/N Updated")
+                    clone_lun.get()  # Refresh the clone LUN object
                     clone_lun.state = 'online'
-                    clone_lun.patch()
+                    if clone_lun.patch():
+                        print("LUN Online")
                     for igroup in igroup_name:
                         resourcelun = LunMap()
                         resourcelun.svm = {"name": svm_name}

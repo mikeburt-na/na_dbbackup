@@ -289,6 +289,7 @@ def clone_lun(args) -> None:
                 print("======================================================================")
                 print("Volume Clone " + resourcevol.name + " Created Successfully.")
                 print("======================================================================")
+
             # Grab the parent LUN serial numbers and update the clone LUNs
             for parent_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + vol + "**"}):
                 if parent_lun.get():  # Refresh the parent LUN object
@@ -297,6 +298,7 @@ def clone_lun(args) -> None:
                     print("LUN Refresh for S/N Completed")
                     print("Parent LUN S/N: " + parent_serial_number)
                     print("======================================================================")
+
                 for clone_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
                     if clone_lun.get():  # Refresh the clone LUN object
                         clone_serial_number = clone_lun.serial_number
@@ -305,20 +307,24 @@ def clone_lun(args) -> None:
                         print("Clone LUN S/N: " + clone_serial_number)
                         print("======================================================================")
                     clone_lun.enabled = 'false'
+
                     if clone_lun.patch():
                         print("======================================================================")
                         print("Clone LUN Offline Complete")
                         print("======================================================================")
+
                     if clone_lun.get():  # Refresh the clone LUN object
                         clone_lun_state = clone_lun.status.state
                         print("======================================================================")
                         print("Clone LUN State: " + clone_lun_state)
                         print("======================================================================")
                     clone_lun.serial_number = parent_serial_number
+
                     if clone_lun.patch():
                         print("======================================================================")
                         print("Clone LUN S/N Updated to Parent LUN S/N")
                         print("======================================================================")
+
                     if clone_lun.get():  # Refresh the clone LUN object
                         clone_serial_number = clone_lun.serial_number
                         print("======================================================================")
@@ -326,8 +332,12 @@ def clone_lun(args) -> None:
                         print("Clone LUN S/N: " + clone_serial_number)
                         print("======================================================================")
                     clone_lun.enabled = 'true'
+                    
                     if clone_lun.patch():
-                        print("LUN Online")
+                        print("======================================================================")
+                        print("Clone LUN State: " + clone_lun_state)
+                        print("======================================================================")
+
                     for igroup in igroup_name:
                         resourcelun = LunMap()
                         resourcelun.svm = {"name": svm_name}

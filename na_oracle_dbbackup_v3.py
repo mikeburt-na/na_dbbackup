@@ -308,7 +308,7 @@ def clone_lun(args) -> None:
                         print("======================================================================")
                     clone_lun.enabled = 'false'
 
-                    if clone_lun.patch():
+                    if clone_lun.patch():  # Offline clone LUN
                         print("======================================================================")
                         print("Clone LUN Offline Complete")
                         print("======================================================================")
@@ -319,8 +319,9 @@ def clone_lun(args) -> None:
                         print("Clone LUN State: " + clone_lun_state)
                         print("======================================================================")
                     clone_lun.serial_number = parent_serial_number
+                    print(parent_serial_number)
 
-                    if clone_lun.patch():
+                    if clone_lun.patch():  # Update clone LUN S/N to parent LUN S/N
                         print("======================================================================")
                         print("Clone LUN S/N Updated to Parent LUN S/N")
                         print("======================================================================")
@@ -333,7 +334,7 @@ def clone_lun(args) -> None:
                         print("======================================================================")
                     clone_lun.enabled = 'true'
 
-                    if clone_lun.patch():
+                    if clone_lun.patch():  # Online clone lun
                         print("======================================================================")
                         print("Clone LUN Online Complete")
                         print("======================================================================")

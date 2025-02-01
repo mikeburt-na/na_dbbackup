@@ -332,11 +332,17 @@ def clone_lun(args) -> None:
                         print("Clone LUN S/N: " + clone_serial_number)
                         print("======================================================================")
                     clone_lun.enabled = 'true'
-                    
+
                     if clone_lun.patch():
                         print("======================================================================")
-                        print("Clone LUN State: " + clone_lun_state)
+                        print("Clone LUN Online Complete")
                         print("======================================================================")
+
+                    if clone_lun.get():  # Refresh the clone LUN object
+                        clone_lun_state = clone_lun.status.state
+                        print("======================================================================")
+                        print("Clone LUN State: " + clone_lun_state)
+                        print("======================================================================")  
 
                     for igroup in igroup_name:
                         resourcelun = LunMap()

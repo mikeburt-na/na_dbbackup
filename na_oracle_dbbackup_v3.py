@@ -304,7 +304,7 @@ def clone_lun(args) -> None:
                         print("Clone LUN S/N Refresh Completed")
                         print("Clone LUN S/N: " + clone_serial_number)
                         print("======================================================================")
-                    clone_lun.enable = 'false'
+                    clone_lun.enabled = 'false'
                     if clone_lun.patch():
                         print("======================================================================")
                         print("Clone LUN Offline Complete")

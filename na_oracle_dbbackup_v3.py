@@ -325,7 +325,7 @@ def clone_lun(args) -> None:
                         print("Clone LUN S/N Refresh Completed")
                         print("Clone LUN S/N: " + clone_serial_number)
                         print("======================================================================")
-                    clone_lun.state = 'online'
+                    clone_lun.enabled = 'true'
                     if clone_lun.patch():
                         print("LUN Online")
                     for igroup in igroup_name:

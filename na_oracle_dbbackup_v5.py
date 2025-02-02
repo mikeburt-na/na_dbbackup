@@ -256,7 +256,7 @@ def delete_clone(args) -> None:
 def clone_lun(args) -> None:
     """Clone Volume, Update LUN Serial, and Map LUN"""
     svm_name = args.cluster
-    ontap_cluster = args.ontap_cluster
+    ontap_cluster = args.cluster
     volume_name = args.volume_name
     if not isinstance(volume_name, list):
         volume_name = [volume_name]

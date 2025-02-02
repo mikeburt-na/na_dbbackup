@@ -18,6 +18,7 @@ from netapp_ontap.resources import Snapshot,SnapmirrorRelationship,SnapmirrorTra
 from utils import Argument, parse_args, setup_logging, setup_connection
 from utils import show_svm, show_volume, get_key_volume, show_snapshot, show_lun
 from datetime import datetime
+import requests
 
 
 def list_snapshot(args) -> None:
@@ -254,7 +255,6 @@ def delete_clone(args) -> None:
 def clone_lun(args) -> None:
     """Clone Volume, Update LUN Serial, and Map LUN"""
     svm_name = args.cluster
-    
     volume_name = args.volume_name
     if not isinstance(volume_name, list):
         volume_name = [volume_name]
@@ -269,6 +269,11 @@ def clone_lun(args) -> None:
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
 
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic <base64_encoded_credentials>'
+    }
+
     try:
         print("======================================================================")
         print("Oracle DB Backup LUN(s) Clone Creation Request Successful:")
@@ -281,86 +286,85 @@ def clone_lun(args) -> None:
 
         for vol in volume_name:
             # Create the volume clone
-            resourcevol = Volume()
-            resourcevol.name = clone_name_auto
-            resourcevol.clone = {"parent_volume": {"name": vol},"parent_snapshot": {"name": snapshot_name}, "is_flexclone": "true"}
-            resourcevol.svm = {"name": svm_name}
-            if resourcevol.post(hydrate=True):
+            clone_payload = {
+                "name": clone_name_auto,
+                "clone": {
+                    "parent_volume": {"name": vol},
+                    "parent_snapshot": {"name": snapshot_name},
+                    "is_flexclone": "true"
+                },
+                "svm": {"name": svm_name}
+            }
+            clone_response = requests.post(f'https://<ontap_cluster>/api/storage/volumes', headers=headers, json=clone_payload, verify=False)
+            if clone_response.status_code == 201:
                 print("======================================================================")
-                print("Volume Clone " + resourcevol.name + " Created Successfully.")
+                print("Volume Clone " + clone_name_auto + " Created Successfully.")
                 print("======================================================================")
+            else:
+                print("Error creating volume clone:", clone_response.json())
+                continue
 
             # Grab the parent LUN serial numbers and update the clone LUNs
-            for parent_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + vol + "**"}):
-                if parent_lun.get():  # Refresh the parent LUN object
-                    parent_serial_number = parent_lun.serial_number
+            parent_luns_response = requests.get(f'https://<ontap_cluster>/api/storage/luns?svm.name={svm_name}&volume.name={vol}', headers=headers, verify=False)
+            if parent_luns_response.status_code == 200:
+                parent_luns = parent_luns_response.json()['records']
+                for parent_lun in parent_luns:
+                    parent_serial_number = parent_lun['serial_number']
                     print("======================================================================")
-                    print("LUN Refresh for S/N Completed")
                     print("Parent LUN S/N: " + parent_serial_number)
                     print("======================================================================")
 
-                for clone_lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
-                    if clone_lun.get():  # Refresh the clone LUN object
-                        clone_serial_number = clone_lun.serial_number
-                        print("======================================================================")
-                        print("Clone LUN S/N Refresh Completed")
-                        print("Clone LUN S/N: " + clone_serial_number)
-                        print("======================================================================")
-                    clone_lun.enabled = 'false'
+                    clone_luns_response = requests.get(f'https://<ontap_cluster>/api/storage/luns?svm.name={svm_name}&volume.name={clone_name_auto}', headers=headers, verify=False)
+                    if clone_luns_response.status_code == 200:
+                        clone_luns = clone_luns_response.json()['records']
+                        for clone_lun in clone_luns:
+                            # Offline the clone LUN
+                            offline_payload = {"enabled": False}
+                            offline_response = requests.patch(f'https://<ontap_cluster>/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=offline_payload, verify=False)
+                            if offline_response.status_code == 200:
+                                print("======================================================================")
+                                print("Clone LUN Offline Complete")
+                                print("======================================================================")
+                            else:
+                                print("Error taking clone LUN offline:", offline_response.json())
+                                continue
 
-                    if clone_lun.patch():  # Offline clone LUN
-                        print("======================================================================")
-                        print("Clone LUN Offline Complete")
-                        print("======================================================================")
+                            # Update the clone LUN serial number
+                            update_payload = {"serial_number": parent_serial_number}
+                            update_response = requests.patch(f'https://<ontap_cluster>/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=update_payload, verify=False)
+                            if update_response.status_code == 200:
+                                print("======================================================================")
+                                print("Clone LUN S/N Updated to Parent LUN S/N")
+                                print("======================================================================")
+                            else:
+                                print("Error updating clone LUN serial number:", update_response.json())
+                                continue
 
-                    if clone_lun.get():  # Refresh the clone LUN object
-                        clone_lun_state = clone_lun.status.state
-                        print("======================================================================")
-                        print("Clone LUN State: " + clone_lun_state)
-                        print("======================================================================")
-                    #clone_lun.serial_number = parent_serial_number
-                    #print(parent_serial_number)
-    
-                    patch_body = {
-                        "serial_number": parent_serial_number
-                    }
+                            # Online the clone LUN
+                            online_payload = {"enabled": True}
+                            online_response = requests.patch(f'https://<ontap_cluster>/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=online_payload, verify=False)
+                            if online_response.status_code == 200:
+                                print("======================================================================")
+                                print("Clone LUN Online Complete")
+                                print("======================================================================")
+                            else:
+                                print("Error taking clone LUN online:", online_response.json())
+                                continue
 
-                    # Perform the PATCH operation
-                    clone_lun.patch(hydrate=True, body=patch_body)
-
-                    if clone_lun.patch():  # Update clone LUN S/N to parent LUN S/N
-                        print("======================================================================")
-                        print("Clone LUN S/N Updated to Parent LUN S/N")
-                        print("======================================================================")
-
-                    if clone_lun.get():  # Refresh the clone LUN object
-                        clone_serial_number = clone_lun.serial_number
-                        print("======================================================================")
-                        print("Clone LUN S/N Refresh Completed")
-                        print("Clone LUN S/N: " + clone_serial_number)
-                        print("======================================================================")
-                    clone_lun.enabled = 'true'
-
-                    if clone_lun.patch():  # Online clone lun
-                        print("======================================================================")
-                        print("Clone LUN Online Complete")
-                        print("======================================================================")
-
-                    if clone_lun.get():  # Refresh the clone LUN object
-                        clone_lun_state = clone_lun.status.state
-                        print("======================================================================")
-                        print("Clone LUN State: " + clone_lun_state)
-                        print("======================================================================")  
-
-                    for igroup in igroup_name:
-                        resourcelun = LunMap()
-                        resourcelun.svm = {"name": svm_name}
-                        resourcelun.igroup = {"name": igroup}
-                        resourcelun.lun = {"name": clone_lun.name}
-                        if resourcelun.post(hydrate=True):
-                            print("Clone LUN " + clone_lun.name + " Mapped to " + igroup + " Successfully.")
-    except NetAppRestError as error:
-        print("Exception caught :" + str(error))
+                            # Map the clone LUN to the iGroup
+                            for igroup in igroup_name:
+                                map_payload = {
+                                    "svm": {"name": svm_name},
+                                    "igroup": {"name": igroup},
+                                    "lun": {"name": clone_lun["name"]}
+                                }
+                                map_response = requests.post(f'https://<ontap_cluster>/api/protocols/san/lun-maps', headers=headers, json=map_payload, verify=False)
+                                if map_response.status_code == 201:
+                                    print("Clone LUN " + clone_lun["name"] + " Mapped to " + igroup + " Successfully.")
+                                else:
+                                    print("Error mapping clone LUN to iGroup:", map_response.json())
+    except Exception as error:
+        print("Exception caught:", str(error))
 
 
 def snapshot_ops(args) -> None:

@@ -255,6 +255,7 @@ def delete_clone(args) -> None:
 def clone_lun(args) -> None:
     """Clone Volume, Update LUN Serial, and Map LUN"""
     svm_name = args.cluster
+    ontap_cluster = args.cluster
     volume_name = args.volume_name
     if not isinstance(volume_name, list):
         volume_name = [volume_name]
@@ -295,7 +296,7 @@ def clone_lun(args) -> None:
                 },
                 "svm": {"name": svm_name}
             }
-            clone_response = requests.post(f'https://<ontap_cluster>/api/storage/volumes', headers=headers, json=clone_payload, verify=False)
+            clone_response = requests.post(f'https://{ontap_cluster}/api/storage/volumes', headers=headers, json=clone_payload, verify=False)
             if clone_response.status_code == 201:
                 print("======================================================================")
                 print("Volume Clone " + clone_name_auto + " Created Successfully.")
@@ -305,7 +306,7 @@ def clone_lun(args) -> None:
                 continue
 
             # Grab the parent LUN serial numbers and update the clone LUNs
-            parent_luns_response = requests.get(f'https://<ontap_cluster>/api/storage/luns?svm.name={svm_name}&volume.name={vol}', headers=headers, verify=False)
+            parent_luns_response = requests.get(f'https://{ontap_cluster}/api/storage/luns?svm.name={svm_name}&volume.name={vol}', headers=headers, verify=False)
             if parent_luns_response.status_code == 200:
                 parent_luns = parent_luns_response.json()['records']
                 for parent_lun in parent_luns:
@@ -314,13 +315,13 @@ def clone_lun(args) -> None:
                     print("Parent LUN S/N: " + parent_serial_number)
                     print("======================================================================")
 
-                    clone_luns_response = requests.get(f'https://<ontap_cluster>/api/storage/luns?svm.name={svm_name}&volume.name={clone_name_auto}', headers=headers, verify=False)
+                    clone_luns_response = requests.get(f'https://{ontap_cluster}/api/storage/luns?svm.name={svm_name}&volume.name={clone_name_auto}', headers=headers, verify=False)
                     if clone_luns_response.status_code == 200:
                         clone_luns = clone_luns_response.json()['records']
                         for clone_lun in clone_luns:
                             # Offline the clone LUN
                             offline_payload = {"enabled": False}
-                            offline_response = requests.patch(f'https://<ontap_cluster>/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=offline_payload, verify=False)
+                            offline_response = requests.patch(f'https://{ontap_cluster}/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=offline_payload, verify=False)
                             if offline_response.status_code == 200:
                                 print("======================================================================")
                                 print("Clone LUN Offline Complete")
@@ -331,7 +332,7 @@ def clone_lun(args) -> None:
 
                             # Update the clone LUN serial number
                             update_payload = {"serial_number": parent_serial_number}
-                            update_response = requests.patch(f'https://<ontap_cluster>/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=update_payload, verify=False)
+                            update_response = requests.patch(f'https://{ontap_cluster}/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=update_payload, verify=False)
                             if update_response.status_code == 200:
                                 print("======================================================================")
                                 print("Clone LUN S/N Updated to Parent LUN S/N")
@@ -342,7 +343,7 @@ def clone_lun(args) -> None:
 
                             # Online the clone LUN
                             online_payload = {"enabled": True}
-                            online_response = requests.patch(f'https://<ontap_cluster>/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=online_payload, verify=False)
+                            online_response = requests.patch(f'https://{ontap_cluster}/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=online_payload, verify=False)
                             if online_response.status_code == 200:
                                 print("======================================================================")
                                 print("Clone LUN Online Complete")
@@ -358,7 +359,7 @@ def clone_lun(args) -> None:
                                     "igroup": {"name": igroup},
                                     "lun": {"name": clone_lun["name"]}
                                 }
-                                map_response = requests.post(f'https://<ontap_cluster>/api/protocols/san/lun-maps', headers=headers, json=map_payload, verify=False)
+                                map_response = requests.post(f'https://{ontap_cluster}/api/protocols/san/lun-maps', headers=headers, json=map_payload, verify=False)
                                 if map_response.status_code == 201:
                                     print("Clone LUN " + clone_lun["name"] + " Mapped to " + igroup + " Successfully.")
                                 else:

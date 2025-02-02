@@ -19,6 +19,7 @@ from utils import Argument, parse_args, setup_logging, setup_connection
 from utils import show_svm, show_volume, get_key_volume, show_snapshot, show_lun
 from datetime import datetime
 import requests
+import base64
 
 
 def list_snapshot(args) -> None:
@@ -255,7 +256,7 @@ def delete_clone(args) -> None:
 def clone_lun(args) -> None:
     """Clone Volume, Update LUN Serial, and Map LUN"""
     svm_name = args.cluster
-    ontap_cluster = args.cluster
+    ontap_cluster = args.ontap_cluster
     volume_name = args.volume_name
     if not isinstance(volume_name, list):
         volume_name = [volume_name]
@@ -270,9 +271,15 @@ def clone_lun(args) -> None:
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
 
+    # Encode the credentials
+    username = args.api_user
+    password = args.api_pass
+    credentials = f"{username}:{password}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic <base64_encoded_credentials>'
+        'Authorization': f'Basic {encoded_credentials}'
     }
 
     try:

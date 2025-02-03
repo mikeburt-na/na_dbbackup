@@ -87,6 +87,10 @@ def parse_args(
         "-i",
         "--igroup_name",
         help="iGroup Name")
+    parser.add_argument(
+        "-z",
+        "--cluster_name",
+        help="Cluster Name")
     parsed_args = parser.parse_args()
 
     # collect the password without echo if not already provided

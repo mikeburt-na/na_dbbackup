@@ -19,6 +19,7 @@ from utils import Argument, parse_args, setup_logging, setup_connection
 from utils import show_svm, show_volume, get_key_volume, show_snapshot, show_lun
 from datetime import datetime
 import requests
+import base64
 
 
 def list_snapshot(args) -> None:
@@ -270,6 +271,17 @@ def clone_lun(args) -> None:
     now = datetime.now()
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
+
+    # Encode the credentials
+    username = args.api_user
+    password = args.api_pass
+    credentials = f"{username}:{password}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Basic {encoded_credentials}'
+    }
 
     try:
         print("======================================================================")

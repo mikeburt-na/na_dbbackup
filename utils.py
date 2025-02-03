@@ -91,6 +91,15 @@ def parse_args(
         "-z",
         "--cluster_name",
         help="Cluster Name")
+    parser.add_argument(
+        "-x",
+        "--cluster_user",
+        default="admin",
+        help="API Username")
+    parser.add_argument(
+        "-y",
+        "--cluster_pass",
+        help="API Password")
     parsed_args = parser.parse_args()
 
     # collect the password without echo if not already provided

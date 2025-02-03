@@ -273,8 +273,8 @@ def clone_lun(args) -> None:
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
 
     # Encode the credentials
-    username = args.api_user
-    password = args.api_pass
+    username = args.cluster_user
+    password = args.cluster_pass
     credentials = f"{username}:{password}"
     encoded_credentials = base64.b64encode(credentials.encode()).decode()
 

@@ -309,7 +309,7 @@ def clone_lun(args) -> None:
                 print("Volume Clone " + clone_name_auto + " Created Successfully.")
                 print("======================================================================")
             else:
-                print("Error creating volume clone:", clone_response.json())
+                print("Error creating volume clone:", clone_response.status_code, clone_response.text)
                 continue
 
             # Grab the parent LUN serial numbers and update the clone LUNs
@@ -334,7 +334,7 @@ def clone_lun(args) -> None:
                                 print("Clone LUN Offline Complete")
                                 print("======================================================================")
                             else:
-                                print("Error taking clone LUN offline:", offline_response.json())
+                                print("Error taking clone LUN offline:", offline_response.status_code, offline_response.text)
                                 continue
 
                             # Update the clone LUN serial number
@@ -345,7 +345,7 @@ def clone_lun(args) -> None:
                                 print("Clone LUN S/N Updated to Parent LUN S/N")
                                 print("======================================================================")
                             else:
-                                print("Error updating clone LUN serial number:", update_response.json())
+                                print("Error updating clone LUN serial number:", update_response.status_code, update_response.text)
                                 continue
 
                             # Online the clone LUN
@@ -356,7 +356,7 @@ def clone_lun(args) -> None:
                                 print("Clone LUN Online Complete")
                                 print("======================================================================")
                             else:
-                                print("Error taking clone LUN online:", online_response.json())
+                                print("Error taking clone LUN online:", online_response.status_code, online_response.text)
                                 continue
 
                             # Map the clone LUN to the iGroup
@@ -370,7 +370,7 @@ def clone_lun(args) -> None:
                                 if map_response.status_code == 201:
                                     print("Clone LUN " + clone_lun["name"] + " Mapped to " + igroup + " Successfully.")
                                 else:
-                                    print("Error mapping clone LUN to iGroup:", map_response.json())
+                                    print("Error mapping clone LUN to iGroup:", map_response.status_code, map_response.text)
     except Exception as error:
         print("Exception caught:", str(error))
 

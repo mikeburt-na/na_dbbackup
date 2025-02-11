@@ -266,8 +266,8 @@ def clone_lun(args) -> None:
     mount_path = args.mount_path
 
     # Encode the credentials
-    username = args.api_user
-    password = args.api_pass
+    username = args.cluster_user
+    password = args.cluster_pass
     credentials = f"{username}:{password}"
     encoded_credentials = base64.b64encode(credentials.encode()).decode()
 

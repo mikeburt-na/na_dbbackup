@@ -279,6 +279,8 @@ def clone_lun(args) -> None:
         print("iGroup: " + ', '.join(igroup_name))
         print("======================================================================")
 
+
+
         for vol in volume_name:
             resourcevol = Volume()
             resourcevol.name = clone_name_auto
@@ -287,6 +289,9 @@ def clone_lun(args) -> None:
             if resourcevol.post(hydrate=True):
                 print("Volume Clone " + resourcevol.name + " Created Successfully.")
             for lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
+                lun.serial_number
+                lun.state = 'offline'
+                lun.patch()
                 #print(lun.name)
                 for igroup in igroup_name:
                     resourcelun = LunMap()

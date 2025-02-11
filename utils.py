@@ -100,6 +100,14 @@ def parse_args(
         "-y",
         "--cluster_pass",
         help="API Password")
+    parser.add_argument(
+        "-m",
+        "--mount_path",
+        help="Mount Path")
+    parser.add_argument(
+        "-l",
+        "--lun_serial_number",
+        help="LUN Serial Number")
     parsed_args = parser.parse_args()
 
     # collect the password without echo if not already provided

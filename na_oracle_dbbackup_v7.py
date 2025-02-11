@@ -20,6 +20,7 @@ from utils import show_svm, show_volume, get_key_volume, show_snapshot, show_lun
 from datetime import datetime
 import requests
 import base64
+import subprocess
 
 
 def list_snapshot(args) -> None:
@@ -254,22 +255,15 @@ def delete_clone(args) -> None:
 
 
 def clone_lun(args) -> None:
-    """Clone Volume, Update LUN Serial, and Map LUN"""
+    """Break SnapMirror, Rescan iSCSI LUNs, Refresh Multipath, and Mount NFS Export"""
     svm_name = args.cluster
     ontap_cluster = args.ontap_cluster
     volume_name = args.volume_name
     if not isinstance(volume_name, list):
         volume_name = [volume_name]
 
-    igroup_name = args.igroup_name
-    if not isinstance(igroup_name, list):
-        igroup_name = [igroup_name]
-
-    snapshot_name = args.snapshot
-
-    now = datetime.now()
-    dt_string = now.strftime("%d%m%Y_%H%M%S")
-    clone_name_auto = snapshot_name + '_CLONE_' + dt_string
+    lun_serial_number = args.lun_serial_number
+    mount_path = args.mount_path
 
     # Encode the credentials
     username = args.api_user
@@ -285,92 +279,41 @@ def clone_lun(args) -> None:
     try:
         print("======================================================================")
         print("Oracle DB Backup LUN(s) Clone Creation Request Successful:")
-        print("Snapshot: " + snapshot_name)
         print("SVM: " + svm_name)
         print("Parent Volume: " + ', '.join(volume_name))
-        print("Clone: " + clone_name_auto)
-        print("iGroup: " + ', '.join(igroup_name))
         print("======================================================================")
 
         for vol in volume_name:
-            # Create the volume clone
-            clone_payload = {
-                "name": clone_name_auto,
-                "clone": {
-                    "parent_volume": {"name": vol},
-                    "parent_snapshot": {"name": snapshot_name},
-                    "is_flexclone": "true"
-                },
-                "svm": {"name": svm_name}
-            }
-            clone_response = requests.post(f'https://{ontap_cluster}/api/storage/volumes', headers=headers, json=clone_payload, verify=False)
-            if clone_response.status_code == 201:
+            # Break the SnapMirror relationship
+            snapmirror_break_payload = {"action": "break"}
+            snapmirror_break_response = requests.post(f'https://{ontap_cluster}/api/snapmirror/relationships/{vol}/break', headers=headers, json=snapmirror_break_payload, verify=False)
+            if snapmirror_break_response.status_code == 200:
                 print("======================================================================")
-                print("Volume Clone " + clone_name_auto + " Created Successfully.")
+                print("SnapMirror relationship broken for volume " + vol)
                 print("======================================================================")
             else:
-                print("Error creating volume clone:", clone_response.status_code, clone_response.text)
+                print("Error breaking SnapMirror relationship:", snapmirror_break_response.status_code, snapmirror_break_response.text)
                 continue
 
-            # Grab the parent LUN serial numbers and update the clone LUNs
-            parent_luns_response = requests.get(f'https://{ontap_cluster}/api/storage/luns?svm.name={svm_name}&volume.name={vol}', headers=headers, verify=False)
-            if parent_luns_response.status_code == 200:
-                parent_luns = parent_luns_response.json()['records']
-                for parent_lun in parent_luns:
-                    parent_serial_number = parent_lun['serial_number']
-                    print("======================================================================")
-                    print("Parent LUN S/N: " + parent_serial_number)
-                    print("======================================================================")
+            # Rescan for iSCSI LUNs using iscsiadm
+            subprocess.run(["iscsiadm", "-m", "node", "-R"], check=True)
+            print("======================================================================")
+            print("iSCSI LUN Rescan Complete")
+            print("======================================================================")
 
-                    clone_luns_response = requests.get(f'https://{ontap_cluster}/api/storage/luns?svm.name={svm_name}&volume.name={clone_name_auto}', headers=headers, verify=False)
-                    if clone_luns_response.status_code == 200:
-                        clone_luns = clone_luns_response.json()['records']
-                        for clone_lun in clone_luns:
-                            # Offline the clone LUN
-                            offline_payload = {"enabled": False}
-                            offline_response = requests.patch(f'https://{ontap_cluster}/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=offline_payload, verify=False)
-                            if offline_response.status_code == 200:
-                                print("======================================================================")
-                                print("Clone LUN Offline Complete")
-                                print("======================================================================")
-                            else:
-                                print("Error taking clone LUN offline:", offline_response.status_code, offline_response.text)
-                                continue
+            # Refresh multipath
+            subprocess.run(["multipath", "-r"], check=True)
+            print("======================================================================")
+            print("Multipath Refresh Complete")
+            print("======================================================================")
 
-                            # Update the clone LUN serial number
-                            update_payload = {"serial_number": parent_serial_number}
-                            update_response = requests.patch(f'https://{ontap_cluster}/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=update_payload, verify=False)
-                            if update_response.status_code == 200:
-                                print("======================================================================")
-                                print("Clone LUN S/N Updated to Parent LUN S/N")
-                                print("======================================================================")
-                            else:
-                                print("Error updating clone LUN serial number:", update_response.status_code, update_response.text)
-                                continue
+            # Mount the LUN using device mapper with the LUN serial number
+            device_path = f"/dev/mapper/{lun_serial_number}"
+            subprocess.run(["mount", device_path, mount_path], check=True)
+            print("======================================================================")
+            print(f"LUN {device_path} Mounted at {mount_path}")
+            print("======================================================================")
 
-                            # Online the clone LUN
-                            online_payload = {"enabled": True}
-                            online_response = requests.patch(f'https://{ontap_cluster}/api/storage/luns/{clone_lun["uuid"]}', headers=headers, json=online_payload, verify=False)
-                            if online_response.status_code == 200:
-                                print("======================================================================")
-                                print("Clone LUN Online Complete")
-                                print("======================================================================")
-                            else:
-                                print("Error taking clone LUN online:", online_response.status_code, online_response.text)
-                                continue
-
-                            # Map the clone LUN to the iGroup
-                            for igroup in igroup_name:
-                                map_payload = {
-                                    "svm": {"name": svm_name},
-                                    "igroup": {"name": igroup},
-                                    "lun": {"name": clone_lun["name"]}
-                                }
-                                map_response = requests.post(f'https://{ontap_cluster}/api/protocols/san/lun-maps', headers=headers, json=map_payload, verify=False)
-                                if map_response.status_code == 201:
-                                    print("Clone LUN " + clone_lun["name"] + " Mapped to " + igroup + " Successfully.")
-                                else:
-                                    print("Error mapping clone LUN to iGroup:", map_response.status_code, map_response.text)
     except Exception as error:
         print("Exception caught:", str(error))
 

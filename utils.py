@@ -89,7 +89,7 @@ def parse_args(
         help="iGroup Name")
     parser.add_argument(
         "-z",
-        "--cluster_name",
+        "--ontap_cluster",
         help="Cluster Name")
     parser.add_argument(
         "-x",

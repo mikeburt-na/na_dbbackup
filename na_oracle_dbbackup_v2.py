@@ -265,7 +265,7 @@ def lun_ext_backup_update(args) -> None:
 
     snapshot_name = args.snapshot
     
-    SMPath = svm_name + ':' + volume_name
+    SMPath = svm_name + ':' + ','.join(volume_name)
 
     try:
         print()

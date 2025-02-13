@@ -18,6 +18,7 @@ from netapp_ontap.resources import Snapshot,SnapmirrorRelationship,SnapmirrorTra
 from utils import Argument, parse_args, setup_logging, setup_connection
 from utils import show_svm, show_volume, get_key_volume, show_snapshot, show_lun
 from datetime import datetime
+import time
 
 
 def list_snapshot(args) -> None:
@@ -288,11 +289,19 @@ def lun_ext_backup_update(args) -> None:
                     print("Source Path: " + snapmirrorDetail.source.path + "---->Destination Path: " + snapmirrorDetail.destination.path)
                     print("Previous State: " + snapmirrorDetail.state + "---->Current State: " + snapmirrorUpdate.state)
                     print("======================================================================")
+
+                    # Loop until snapmirrorUpdate.state is 'success'
+                    while True:
+                        snapmirrorUpdate.get()
+                        if snapmirrorUpdate.state == 'success':
+                            break
+                        print("Waiting for SnapMirror update to complete...")
+                        time.sleep(10)  # Wait for 10 seconds before checking again
+
                 else:
                     print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
                 
-                #snapmirrorBreak = SnapmirrorRelationship(snapmirrorDetail.uuid)
-                if snapmirrorDetail.state == 'snapmirrored':
+                if snapmirrorUpdate.state == 'success':
                     snapmirrorDetail.state = 'broken_off'
                     snapmirrorDetail.patch()
                     snapmirrorDetail.get()

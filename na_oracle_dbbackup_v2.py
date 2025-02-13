@@ -291,13 +291,15 @@ def lun_ext_backup_update(args) -> None:
                     print("======================================================================")
                 else:
                     print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
-                if snapmirrorDetail.state == 'broken_off':
-                    snapmirrorUpdate.post()
-                    snapmirrorUpdate.get()
+                
+                snapmirrorBreak = SnapmirrorRelationship(snapmirrorDetail.uuid)
+                if snapmirrorDetail.state == 'snapmirrored':
+                    snapmirrorBreak.patch()
+                    snapmirrorBreak.get()
                     print()
                     print("Oracle DB Backup Snapmirror Break Successfully Initiated")
                     print("Source Path: " + snapmirrorDetail.source.path + "---->Destination Path: " + snapmirrorDetail.destination.path)
-                    print("Previous State: " + snapmirrorDetail.state + "---->Current State: " + snapmirrorUpdate.state)
+                    print("Previous State: " + snapmirrorDetail.state + "---->Current State: " + snapmirrorBreak.state)
                     print("======================================================================")
                 else:
                     print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)

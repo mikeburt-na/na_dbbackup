@@ -293,7 +293,7 @@ def lun_ext_backup_update(args) -> None:
                 
                 snapmirrorBreak = SnapmirrorRelationship(snapmirrorDetail.uuid)
                 if snapmirrorDetail.state == 'snapmirrored':
-                    snapmirrorBreak.state = 'break'
+                    snapmirrorBreak.state = 'broken_off'
                     snapmirrorBreak.patch()
                     snapmirrorBreak.get()
                     print()

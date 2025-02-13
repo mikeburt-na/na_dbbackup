@@ -264,10 +264,6 @@ def lun_ext_backup_update(args) -> None:
         igroup_name = [igroup_name]
 
     snapshot_name = args.snapshot
-
-    now = datetime.now()
-    dt_string = now.strftime("%d%m%Y_%H%M%S")
-    clone_name_auto = snapshot_name + '_CLONE_' + dt_string
     
     SMPath = svm_name + ':' + volume_name
 

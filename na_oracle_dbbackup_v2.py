@@ -275,7 +275,6 @@ def lun_ext_backup_update(args) -> None:
         print("Volume: " + ', '.join(volume_name))
         print("======================================================================")
 
-
         for snapmirrordest in SnapmirrorRelationship.get_collection(fields="destination"):
             if snapmirrordest.destination.path == SMPath:
                 snapmirrorDetail = SnapmirrorRelationship(uuid=snapmirrordest.uuid)
@@ -294,6 +293,7 @@ def lun_ext_backup_update(args) -> None:
                 
                 snapmirrorBreak = SnapmirrorRelationship(snapmirrorDetail.uuid)
                 if snapmirrorDetail.state == 'snapmirrored':
+                    snapmirrorBreak.state = 'break'
                     snapmirrorBreak.patch()
                     snapmirrorBreak.get()
                     print()

@@ -262,6 +262,8 @@ def clone_lun(args) -> None:
     if not isinstance(volume_name, list):
         volume_name = [volume_name]
 
+    vol_uuid = get_key_volume(svm_name, volume_name)
+
     lun_serial_number = args.lun_serial_number
     mount_path = args.mount_path
 
@@ -286,7 +288,7 @@ def clone_lun(args) -> None:
         for vol in volume_name:
             # Break the SnapMirror relationship
             snapmirror_break_payload = {"action": "break"}
-            snapmirror_break_response = requests.post(f'https://{ontap_cluster}/api/snapmirror/relationships/{vol}/break', headers=headers, json=snapmirror_break_payload, verify=False)
+            snapmirror_break_response = requests.post(f'https://{ontap_cluster}/api/snapmirror/relationships/{vol_uuid}/break', headers=headers, json=snapmirror_break_payload, verify=False)
             if snapmirror_break_response.status_code == 200:
                 print("======================================================================")
                 print("SnapMirror relationship broken for volume " + vol)

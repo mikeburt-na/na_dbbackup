@@ -251,8 +251,8 @@ def delete_clone(args) -> None:
         print("Exception caught :" + str(error))
 
 
-def clone_lun(args) -> None:
-    """Clone Volume, Update LUN Serial, and Map LUN"""
+def lun_ext_backup_update(args) -> None:
+    """Local Snapmirror Update, Snapmirror Break, Scan and Mount Already Mapped LUN to Backup Server"""
     svm_name = args.cluster
     
     volume_name = args.volume_name
@@ -268,38 +268,35 @@ def clone_lun(args) -> None:
     now = datetime.now()
     dt_string = now.strftime("%d%m%Y_%H%M%S")
     clone_name_auto = snapshot_name + '_CLONE_' + dt_string
+    
+    SMPath = svm_name + ':' + volume_name
 
     try:
         print()
-        print("Oracle DB Backup LUN(s) Clone Creation Request Successful:")
-        print("Snapshot: " + snapshot_name)
+        print("======================================================================")
+        print("Oracle DB Backup External Backup Update Request Successful:")
         print("SVM: " + svm_name)
-        print("Parent Volume: " + ', '.join(volume_name))
-        print("Clone: " + clone_name_auto)
-        print("iGroup: " + ', '.join(igroup_name))
+        print("Volume: " + ', '.join(volume_name))
         print("======================================================================")
 
 
+        for snapmirrordest in SnapmirrorRelationship.get_collection(fields="destination"):
+            if snapmirrordest.destination.path == SMPath:
+                snapmirrorDetail = SnapmirrorRelationship(uuid=snapmirrordest.uuid)
+                snapmirrorDetail.get()
+                snapmirrorUpdate = SnapmirrorTransfer(snapmirrorDetail.uuid)
+                if snapmirrorDetail.state == 'snapmirrored':
+                    snapmirrorUpdate.post()
+                    snapmirrorUpdate.get()
+                    print()
+                    print("Oracle DB Backup Snapmirror Update Successfully Initiated")
+                    print("Source Path: " + snapmirrorDetail.source.path + "---->Destination Path: " + snapmirrorDetail.destination.path)
+                    print("Previous State: " + snapmirrorDetail.state + "---->Current State: " + snapmirrorUpdate.state)
+                    print("======================================================================")
+                else:
+                    print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
+                break
 
-        for vol in volume_name:
-            resourcevol = Volume()
-            resourcevol.name = clone_name_auto
-            resourcevol.clone = {"parent_volume": {"name": vol},"parent_snapshot": {"name": snapshot_name}, "is_flexclone": "true"}
-            resourcevol.svm = {"name": svm_name}
-            if resourcevol.post(hydrate=True):
-                print("Volume Clone " + resourcevol.name + " Created Successfully.")
-            for lun in Lun.get_collection(**{"svm.name": svm_name, "status.state": "online", "name": "/vol/" + resourcevol.name + "**"}):
-                lun.serial_number
-                lun.state = 'offline'
-                lun.patch()
-                #print(lun.name)
-                for igroup in igroup_name:
-                    resourcelun = LunMap()
-                    resourcelun.svm = {"name": svm_name}
-                    resourcelun.igroup = {"name": igroup}
-                    resourcelun.lun = {"name": lun.name}
-                    if resourcelun.post(hydrate=True):
-                        print("Clone LUN " + lun.name + " Mapped to " + igroup + " Successfully.")
     except NetAppRestError as error:
         print("Exception caught :" + str(error))
 
@@ -328,8 +325,8 @@ def snapshot_ops(args) -> None:
         list_clone(args)
     if snapshotbool == 'delete_clone':
         delete_clone(args)
-    if snapshotbool == 'clone_lun':
-        clone_lun(args)
+    if snapshotbool == 'lun_ext_backup_update':
+        lun_ext_backup_update(args)
 
 
 def main() -> None:

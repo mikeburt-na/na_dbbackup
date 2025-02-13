@@ -331,11 +331,13 @@ def lun_ext_backup_update(args) -> None:
 
                 # Mount the LUN using device mapper with the LUN serial number
                 device_path = f"/dev/mapper/{lun_serial_number}"
-                subprocess.run(["mount", device_path, mount_path], check=True)
-                print("======================================================================")
-                print(f"LUN {device_path} Mounted at {mount_path}")
-                print("======================================================================")
-
+                try:
+                    subprocess.run(["mount", device_path, mount_path], check=True)
+                    print("======================================================================")
+                    print(f"LUN {device_path} Mounted at {mount_path}")
+                    print("======================================================================")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error mounting LUN {device_path} at {mount_path}: {e}")
 
     except NetAppRestError as error:
         print("Exception caught :" + str(error))

@@ -19,6 +19,8 @@ from utils import Argument, parse_args, setup_logging, setup_connection
 from utils import show_svm, show_volume, get_key_volume, show_snapshot, show_lun
 from datetime import datetime
 import time
+import base64
+import subprocess
 
 
 def list_snapshot(args) -> None:
@@ -265,6 +267,8 @@ def lun_ext_backup_update(args) -> None:
         igroup_name = [igroup_name]
 
     snapshot_name = args.snapshot
+    lun_serial_number = args.lun_serial_number
+    mount_path = args.mount_path
     
     SMPath = svm_name + ':' + ','.join(volume_name)
 
@@ -312,6 +316,26 @@ def lun_ext_backup_update(args) -> None:
                     print("======================================================================")
                 else:
                     print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
+
+                # Rescan for iSCSI LUNs using iscsiadm
+                subprocess.run(["iscsiadm", "-m", "node", "-R"], check=True)
+                print("======================================================================")
+                print("iSCSI LUN Rescan Complete")
+                print("======================================================================")
+
+                # Refresh multipath
+                subprocess.run(["multipath", "-r"], check=True)
+                print("======================================================================")
+                print("Multipath Refresh Complete")
+                print("======================================================================")
+
+                # Mount the LUN using device mapper with the LUN serial number
+                device_path = f"/dev/mapper/{lun_serial_number}"
+                subprocess.run(["mount", device_path, mount_path], check=True)
+                print("======================================================================")
+                print(f"LUN {device_path} Mounted at {mount_path}")
+                print("======================================================================")
+
 
     except NetAppRestError as error:
         print("Exception caught :" + str(error))

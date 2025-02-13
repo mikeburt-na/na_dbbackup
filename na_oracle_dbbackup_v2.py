@@ -304,7 +304,7 @@ def lun_ext_backup_update(args) -> None:
 
                 else:
                     print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
-                
+                    break
                 if snapmirrorUpdate.state == 'success':
                     snapmirrorDetail.state = 'broken_off'
                     snapmirrorDetail.patch()

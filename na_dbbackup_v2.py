@@ -39,8 +39,11 @@ class ONTAPRestClient:
             response.raise_for_status()
             return response.json() if response.content else None
         except requests.exceptions.RequestException as e:
-            logger.error(f"REST request failed: {str(e)}")
-            raise
+            error_detail = f"{e}"
+            if hasattr(e, 'response') and e.response is not None:
+                error_detail += f" - Response: {e.response.status_code} {e.response.text}"
+            logger.error(f"REST request failed: {error_detail}")
+            raise Exception(error_detail)
 
 def validate_source_volume(client, svm_name, volume_name):
     """Validate that the source volume exists"""
@@ -127,7 +130,7 @@ def update_snapmirror(client, source_path, destination_path):
         return False
 
 def break_snapmirror(client, destination_path):
-    """Break SnapMirror relationship with job status check"""
+    """Break SnapMirror relationship with detailed error reporting"""
     print("Starting SnapMirror break operation...")
     try:
         print(f"Looking up SnapMirror relationship for destination: {destination_path}")
@@ -155,29 +158,30 @@ def break_snapmirror(client, destination_path):
         response.raise_for_status()
         logger.info("SnapMirror break request sent")
 
-        # Check if the response includes a job link (asynchronous operation)
+        # Check if the response includes a job link
         job_info = response.json() if response.content else {}
         job_id = job_info.get('job', {}).get('uuid')
 
         if job_id:
             print(f"Break operation initiated as job {job_id}, monitoring job status...")
-            max_attempts = 24  # 120 seconds total (5s * 24)
+            max_attempts = 24  # 120 seconds total
             attempt = 0
             while attempt < max_attempts:
                 job_status = client._make_request(
                     'GET',
-                    f"cluster/jobs/{job_id}?fields=state,description"
+                    f"cluster/jobs/{job_id}?fields=state,description,message"
                 )
                 job_state = job_status['state']
                 job_desc = job_status['description']
-                print(f"Job state: {job_state}, Description: {job_desc}")
+                job_msg = job_status.get('message', 'No additional message')
+                print(f"Job state: {job_state}, Description: {job_desc}, Message: {job_msg}")
                 if job_state in ['success', 'failure']:
                     break
                 time.sleep(5)
                 attempt += 1
 
             if job_state == 'failure':
-                raise ValueError(f"Break job failed: {job_desc}")
+                raise ValueError(f"Break job failed: {job_desc} - {job_msg}")
             elif job_state != 'success':
                 print(f"Job did not complete within {max_attempts * 5} seconds, checking relationship state anyway...")
 

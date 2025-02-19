@@ -343,6 +343,95 @@ def lun_ext_backup_update(args) -> None:
         print("Exception caught :" + str(error))
 
 
+def lun_ext_backup_cleanup(args) -> None:
+    """Local Snapmirror Resync and Backup Server SCSI/Multipath Cleanup"""
+    svm_name = args.cluster
+    
+    volume_name = args.volume_name
+    if not isinstance(volume_name, list):
+        volume_name = [volume_name]
+
+    igroup_name = args.igroup_name
+    if not isinstance(igroup_name, list):
+        igroup_name = [igroup_name]
+
+    snapshot_name = args.snapshot
+    lun_serial_number = args.lun_serial_number
+    mount_path = args.mount_path
+    
+    SMPath = svm_name + ':' + ','.join(volume_name)
+
+    try:
+        print()
+        print("======================================================================")
+        print("Oracle DB Backup External Backup Update Request Successful:")
+        print("SVM: " + svm_name)
+        print("Volume: " + ', '.join(volume_name))
+        print("======================================================================")
+
+        for snapmirrordest in SnapmirrorRelationship.get_collection(fields="destination"):
+            if snapmirrordest.destination.path == SMPath:
+                snapmirrorDetail = SnapmirrorRelationship(uuid=snapmirrordest.uuid)
+                snapmirrorDetail.get()
+                snapmirrorUpdate = SnapmirrorTransfer(snapmirrorDetail.uuid)
+                if snapmirrorDetail.state == 'snapmirrored':
+                    snapmirrorUpdate.post()
+                    snapmirrorUpdate.get()
+                    print()
+                    print("Oracle DB Backup Snapmirror Update Successfully Initiated")
+                    print("Source Path: " + snapmirrorDetail.source.path + "---->Destination Path: " + snapmirrorDetail.destination.path)
+                    print("Previous State: " + snapmirrorDetail.state + "---->Current State: " + snapmirrorUpdate.state)
+                    print("======================================================================")
+
+                    # Loop until snapmirrorUpdate.state is 'success'
+                    while True:
+                        snapmirrorUpdate.get()
+                        if snapmirrorUpdate.state == 'success':
+                            break
+                        print("Waiting for SnapMirror update to complete...")
+                        time.sleep(10)  # Wait for 10 seconds before checking again
+
+                else:
+                    print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
+                    break
+                if snapmirrorUpdate.state == 'success':
+                    snapmirrorDetail.state = 'broken_off'
+                    snapmirrorDetail.patch()
+                    snapmirrorDetail.get()
+                    print()
+                    print("Oracle DB Backup Snapmirror Break Successfully Initiated")
+                    print("Source Path: " + snapmirrorDetail.source.path + "---->Destination Path: " + snapmirrorDetail.destination.path)
+                    print("Previous State: " + snapmirrorUpdate.state + "---->Current State: " + snapmirrorDetail.state)
+                    print("======================================================================")
+                else:
+                    print('Mirror is already Transferring or Unhealthy.  Mirror State: ' + snapmirrorDetail.state)
+
+                # Rescan for iSCSI LUNs using iscsiadm
+                subprocess.run(["iscsiadm", "-m", "node", "-R"], check=True)
+                print("======================================================================")
+                print("iSCSI LUN Rescan Complete")
+                print("======================================================================")
+
+                # Refresh multipath
+                subprocess.run(["multipath", "-r"], check=True)
+                print("======================================================================")
+                print("Multipath Refresh Complete")
+                print("======================================================================")
+
+                # Mount the LUN using device mapper with the LUN serial number
+                device_path = f"/dev/mapper/{lun_serial_number}"
+                try:
+                    subprocess.run(["mount", device_path, mount_path], check=True)
+                    print("======================================================================")
+                    print(f"LUN {device_path} Mounted at {mount_path}")
+                    print("======================================================================")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error mounting LUN {device_path} at {mount_path}: {e}")
+
+    except NetAppRestError as error:
+        print("Exception caught :" + str(error))
+
+
 def snapshot_ops(args) -> None:
     """Snapshot Operation"""
     #print("Oracle DB Backup - NetApp Snapshot Operations")

@@ -42,6 +42,24 @@ class ONTAPRestClient:
             logger.error(f"REST request failed: {str(e)}")
             raise
 
+def validate_source_volume(client, svm_name, volume_name):
+    """Validate that the source volume exists"""
+    print(f"Validating source volume: {svm_name}:{volume_name}")
+    try:
+        volumes = client._make_request(
+            'GET',
+            f"storage/volumes?name={volume_name}&svm.name={svm_name}&fields=name,svm.name"
+        )
+        if not volumes.get('records'):
+            raise ValueError(f"Volume {volume_name} not found on SVM {svm_name}")
+        print(f"Source volume {svm_name}:{volume_name} validated successfully")
+        return True
+    except Exception as e:
+        print(f"Error validating source volume: {str(e)}")
+        print("Please verify the SVM name and volume name are correct.")
+        logger.error(f"Failed to validate source volume: {str(e)}")
+        return False
+
 def get_destination_path(client, source_path):
     """Get destination path using snapmirror/list-destinations"""
     print(f"Finding destination path for source: {source_path}")
@@ -59,6 +77,11 @@ def get_destination_path(client, source_path):
         return destination_path
     except Exception as e:
         print(f"Error finding destination path: {str(e)}")
+        print("Troubleshooting suggestions:")
+        print("- Verify that a SnapMirror relationship exists for this source path")
+        print("- Check the source path format (should be <svm_name>:<volume_name>)")
+        print("- Ensure the source volume has a configured SnapMirror destination")
+        print("- Confirm API access and permissions to the cluster")
         logger.error(f"Failed to find destination path: {str(e)}")
         return None
 
@@ -147,7 +170,6 @@ def refresh_multipath():
     """Refresh multipath devices on RHEL"""
     print("Starting multipath refresh...")
     try:
-        # Run multipath -r to refresh multipath devices
         subprocess.run(['multipath', '-r'], check=True)
         print("Multipath refresh completed successfully")
         logger.info("Multipath refresh completed")
@@ -240,6 +262,10 @@ def main():
     # Initialize REST client with command line parameters
     client = ONTAPRestClient(args.host, args.username, args.password, args.verify_ssl)
     print(f"Connected to ONTAP system at {args.host}")
+
+    # Validate source volume exists
+    if not validate_source_volume(client, args.svm_name, args.source_volume):
+        return
 
     # Get destination path from source path
     destination_path = get_destination_path(client, source_path)

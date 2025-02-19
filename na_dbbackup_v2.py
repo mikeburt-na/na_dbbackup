@@ -148,7 +148,7 @@ def break_snapmirror(client, destination_path):
         client._make_request(
             'PATCH',
             f"snapmirror/relationships/{uuid}",
-            {"state": "broken_off"}
+            {"state":"broken_off"}
         )
         logger.info("SnapMirror break request sent")
 

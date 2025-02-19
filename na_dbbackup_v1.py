@@ -61,18 +61,18 @@ def validate_source_volume(client, svm_name, volume_name):
         return False
 
 def get_destination_path(client, source_path):
-    """Get destination path using snapmirror/list-destinations"""
+    """Get destination path using snapmirror/relationships with list_destinations_only"""
     print(f"Finding destination path for source: {source_path}")
     try:
-        destinations = client._make_request(
+        relationships = client._make_request(
             'GET',
-            f"snapmirror/destinations?source.path={source_path}&fields=destination.path"
+            f"snapmirror/relationships?source.path={source_path}&list_destinations_only=true&fields=destination.path"
         )
         
-        if not destinations.get('records'):
-            raise ValueError(f"No SnapMirror destination found for source path: {source_path}")
+        if not relationships.get('records'):
+            raise ValueError(f"No SnapMirror relationship found for source path: {source_path}")
         
-        destination_path = destinations['records'][0]['destination']['path']
+        destination_path = relationships['records'][0]['destination']['path']
         print(f"Found destination path: {destination_path}")
         return destination_path
     except Exception as e:
@@ -80,8 +80,9 @@ def get_destination_path(client, source_path):
         print("Troubleshooting suggestions:")
         print("- Verify that a SnapMirror relationship exists for this source path")
         print("- Check the source path format (should be <svm_name>:<volume_name>)")
-        print("- Ensure the source volume has a configured SnapMirror destination")
+        print("- Ensure the source volume has a configured SnapMirror relationship")
         print("- Confirm API access and permissions to the cluster")
+        print("- Validate the ONTAP version supports this API (9.6 or later)")
         logger.error(f"Failed to find destination path: {str(e)}")
         return None
 

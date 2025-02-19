@@ -127,7 +127,7 @@ def update_snapmirror(client, source_path, destination_path):
         return False
 
 def break_snapmirror(client, destination_path):
-    """Break SnapMirror relationship and verify state"""
+    """Break SnapMirror relationship with job status check"""
     print("Starting SnapMirror break operation...")
     try:
         print(f"Looking up SnapMirror relationship for destination: {destination_path}")
@@ -144,17 +144,46 @@ def break_snapmirror(client, destination_path):
         if current_state != 'snapmirrored':
             raise ValueError(f"Cannot break SnapMirror: current state is '{current_state}', must be 'snapmirrored'")
 
-        print("Breaking SnapMirror relationship...")
-        client._make_request(
-            'PATCH',
-            f"snapmirror/relationships/{uuid}",
-            {"state":"broken_off"}
+        print("Sending SnapMirror break request...")
+        response = requests.patch(
+            f"{client.base_url}/snapmirror/relationships/{uuid}",
+            auth=client.auth,
+            headers=client.headers,
+            json={"state": "broken_off"},
+            verify=client.verify_ssl
         )
+        response.raise_for_status()
         logger.info("SnapMirror break request sent")
 
-        # Wait and verify the state changes to broken_off
-        print("Waiting for SnapMirror relationship to break...")
-        max_attempts = 12  # 60 seconds total (5s * 12)
+        # Check if the response includes a job link (asynchronous operation)
+        job_info = response.json() if response.content else {}
+        job_id = job_info.get('job', {}).get('uuid')
+
+        if job_id:
+            print(f"Break operation initiated as job {job_id}, monitoring job status...")
+            max_attempts = 24  # 120 seconds total (5s * 24)
+            attempt = 0
+            while attempt < max_attempts:
+                job_status = client._make_request(
+                    'GET',
+                    f"cluster/jobs/{job_id}?fields=state,description"
+                )
+                job_state = job_status['state']
+                job_desc = job_status['description']
+                print(f"Job state: {job_state}, Description: {job_desc}")
+                if job_state in ['success', 'failure']:
+                    break
+                time.sleep(5)
+                attempt += 1
+
+            if job_state == 'failure':
+                raise ValueError(f"Break job failed: {job_desc}")
+            elif job_state != 'success':
+                print(f"Job did not complete within {max_attempts * 5} seconds, checking relationship state anyway...")
+
+        # Verify the relationship state
+        print("Verifying SnapMirror relationship state after break...")
+        max_attempts = 24  # 120 seconds total
         attempt = 0
         while attempt < max_attempts:
             status = client._make_request(
@@ -176,7 +205,9 @@ def break_snapmirror(client, destination_path):
         print("Troubleshooting suggestions:")
         print("- Verify the relationship is in 'snapmirrored' state before breaking")
         print("- Check user permissions for SnapMirror operations")
-        print("- Ensure no active transfers or locks prevent the break")
+        print("- Ensure no active transfers, errors, or locks prevent the break")
+        print("- Confirm the destination volume is not in use or quiesced")
+        print("- Check ONTAP event logs for SnapMirror errors (event log show)")
         logger.error(f"Failed to break SnapMirror: {str(e)}")
         return False
 

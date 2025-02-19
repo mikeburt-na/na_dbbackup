@@ -90,7 +90,7 @@ def get_destination_path(client, source_path):
         return None
 
 def update_snapmirror(client, source_path, destination_path):
-    """Perform SnapMirror update"""
+    """Perform SnapMirror update and ensure it’s fully completed"""
     print("Starting SnapMirror update...")
     try:
         print(f"Looking up SnapMirror relationship: {source_path} -> {destination_path}")
@@ -110,18 +110,26 @@ def update_snapmirror(client, source_path, destination_path):
         )
         logger.info("SnapMirror update initiated")
 
-        print("Waiting for SnapMirror transfer to complete...")
-        while True:
+        print("Waiting for SnapMirror transfer to complete and stabilize...")
+        max_attempts = 24  # 120 seconds total
+        attempt = 0
+        while attempt < max_attempts:
             status = client._make_request(
                 'GET',
-                f"snapmirror/relationships/{uuid}?fields=state"
+                f"snapmirror/relationships/{uuid}?fields=state,transfer.state"
             )
-            print(f"Current state: {status['state']}")
-            if status['state'] != 'transferring':
+            rel_state = status['state']
+            transfer_state = status.get('transfer', {}).get('state', 'none')
+            print(f"Relationship state: {rel_state}, Transfer state: {transfer_state}")
+            if rel_state == 'snapmirrored' and transfer_state in ['none', 'success', 'failed']:
                 break
             time.sleep(5)
+            attempt += 1
 
-        print("SnapMirror update completed successfully")
+        if attempt >= max_attempts:
+            raise ValueError("SnapMirror update did not stabilize to 'snapmirrored' within 120 seconds")
+
+        print("SnapMirror update completed and stabilized successfully")
         logger.info("SnapMirror update completed")
         return True
     except Exception as e:
@@ -129,8 +137,69 @@ def update_snapmirror(client, source_path, destination_path):
         logger.error(f"SnapMirror update failed: {str(e)}")
         return False
 
+def quiesce_snapmirror(client, uuid):
+    """Quiesce the SnapMirror relationship to ensure no transfers are in progress"""
+    print("Quiescing SnapMirror relationship...")
+    try:
+        response = requests.patch(
+            f"{client.base_url}/snapmirror/relationships/{uuid}",
+            auth=client.auth,
+            headers=client.headers,
+            json={"state": "quiesced"},
+            verify=client.verify_ssl
+        )
+        response.raise_for_status()
+        logger.info("SnapMirror quiesce request sent")
+
+        # Monitor quiesce job if returned
+        job_info = response.json() if response.content else {}
+        job_id = job_info.get('job', {}).get('uuid')
+        
+        if job_id:
+            print(f"Quiesce operation initiated as job {job_id}, monitoring job status...")
+            max_attempts = 24
+            attempt = 0
+            while attempt < max_attempts:
+                job_status = client._make_request(
+                    'GET',
+                    f"cluster/jobs/{job_id}?fields=state,description,message"
+                )
+                job_state = job_status['state']
+                job_desc = job_status['description']
+                job_msg = job_status.get('message', 'No additional message')
+                print(f"Job state: {job_state}, Description: {job_desc}, Message: {job_msg}")
+                if job_state in ['success', 'failure']:
+                    break
+                time.sleep(5)
+                attempt += 1
+
+            if job_state == 'failure':
+                raise ValueError(f"Quiesce job failed: {job_desc} - {job_msg}")
+
+        # Verify quiesced state
+        max_attempts = 24
+        attempt = 0
+        while attempt < max_attempts:
+            status = client._make_request(
+                'GET',
+                f"snapmirror/relationships/{uuid}?fields=state"
+            )
+            current_state = status['state']
+            print(f"Current state after quiesce attempt: {current_state}")
+            if current_state == 'quiesced':
+                print("SnapMirror relationship quiesced successfully")
+                return True
+            time.sleep(5)
+            attempt += 1
+
+        raise ValueError("Failed to quiesce SnapMirror within 120 seconds")
+    except Exception as e:
+        print(f"Error quiescing SnapMirror: {str(e)}")
+        logger.error(f"Failed to quiesce SnapMirror: {str(e)}")
+        return False
+
 def break_snapmirror(client, destination_path):
-    """Break SnapMirror relationship with detailed error reporting"""
+    """Break SnapMirror relationship after ensuring it’s quiesced"""
     print("Starting SnapMirror break operation...")
     try:
         print(f"Looking up SnapMirror relationship for destination: {destination_path}")
@@ -144,8 +213,12 @@ def break_snapmirror(client, destination_path):
         current_state = relationships['records'][0]['state']
         print(f"Found relationship UUID: {uuid}, Current state: {current_state}")
 
-        if current_state != 'snapmirrored':
-            raise ValueError(f"Cannot break SnapMirror: current state is '{current_state}', must be 'snapmirrored'")
+        # Quiesce if not already quiesced
+        if current_state != 'quiesced':
+            if current_state != 'snapmirrored':
+                raise ValueError(f"Cannot break SnapMirror: current state is '{current_state}', must be 'snapmirrored' or 'quiesced'")
+            if not quiesce_snapmirror(client, uuid):
+                return False
 
         print("Sending SnapMirror break request...")
         response = requests.patch(

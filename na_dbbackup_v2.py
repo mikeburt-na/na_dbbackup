@@ -9,7 +9,7 @@ import argparse
 import os
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Disable SSL warnings (optional, not recommended for production)
@@ -27,6 +27,7 @@ class ONTAPRestClient:
 
     def _make_request(self, method, endpoint, data=None):
         url = f"{self.base_url}/{endpoint}"
+        logger.debug(f"Making {method} request to {url} with data: {json.dumps(data)}")
         try:
             response = requests.request(
                 method,
@@ -36,6 +37,7 @@ class ONTAPRestClient:
                 json=data,
                 verify=self.verify_ssl
             )
+            logger.debug(f"Response: {response.status_code} {response.text}")
             response.raise_for_status()
             return response.json() if response.content else None
         except requests.exceptions.RequestException as e:
@@ -138,7 +140,7 @@ def update_snapmirror(client, source_path, destination_path):
         return False
 
 def quiesce_snapmirror(client, uuid):
-    """Quiesce the SnapMirror relationship to ensure no transfers are in progress"""
+    """Quiesce the SnapMirror relationship"""
     print("Quiescing SnapMirror relationship...")
     try:
         response = requests.patch(
@@ -149,14 +151,14 @@ def quiesce_snapmirror(client, uuid):
             verify=client.verify_ssl
         )
         response.raise_for_status()
+        print(f"Quiesce request sent, response: {response.status_code} {response.text}")
         logger.info("SnapMirror quiesce request sent")
 
-        # Monitor quiesce job if returned
         job_info = response.json() if response.content else {}
         job_id = job_info.get('job', {}).get('uuid')
         
         if job_id:
-            print(f"Quiesce operation initiated as job {job_id}, monitoring job status...")
+            print(f"Quiesce initiated as job {job_id}, monitoring job status...")
             max_attempts = 24
             attempt = 0
             while attempt < max_attempts:
@@ -176,7 +178,6 @@ def quiesce_snapmirror(client, uuid):
             if job_state == 'failure':
                 raise ValueError(f"Quiesce job failed: {job_desc} - {job_msg}")
 
-        # Verify quiesced state
         max_attempts = 24
         attempt = 0
         while attempt < max_attempts:
@@ -199,7 +200,7 @@ def quiesce_snapmirror(client, uuid):
         return False
 
 def break_snapmirror(client, destination_path):
-    """Break SnapMirror relationship after ensuring it’s quiesced"""
+    """Break SnapMirror relationship with detailed debugging"""
     print("Starting SnapMirror break operation...")
     try:
         print(f"Looking up SnapMirror relationship for destination: {destination_path}")
@@ -213,7 +214,6 @@ def break_snapmirror(client, destination_path):
         current_state = relationships['records'][0]['state']
         print(f"Found relationship UUID: {uuid}, Current state: {current_state}")
 
-        # Quiesce if not already quiesced
         if current_state != 'quiesced':
             if current_state != 'snapmirrored':
                 raise ValueError(f"Cannot break SnapMirror: current state is '{current_state}', must be 'snapmirrored' or 'quiesced'")
@@ -229,15 +229,15 @@ def break_snapmirror(client, destination_path):
             verify=client.verify_ssl
         )
         response.raise_for_status()
+        print(f"Break request sent, response: {response.status_code} {response.text}")
         logger.info("SnapMirror break request sent")
 
-        # Check if the response includes a job link
         job_info = response.json() if response.content else {}
         job_id = job_info.get('job', {}).get('uuid')
 
         if job_id:
-            print(f"Break operation initiated as job {job_id}, monitoring job status...")
-            max_attempts = 24  # 120 seconds total
+            print(f"Break initiated as job {job_id}, monitoring job status...")
+            max_attempts = 24
             attempt = 0
             while attempt < max_attempts:
                 job_status = client._make_request(
@@ -255,12 +255,8 @@ def break_snapmirror(client, destination_path):
 
             if job_state == 'failure':
                 raise ValueError(f"Break job failed: {job_desc} - {job_msg}")
-            elif job_state != 'success':
-                print(f"Job did not complete within {max_attempts * 5} seconds, checking relationship state anyway...")
 
-        # Verify the relationship state
-        print("Verifying SnapMirror relationship state after break...")
-        max_attempts = 24  # 120 seconds total
+        max_attempts = 24
         attempt = 0
         while attempt < max_attempts:
             status = client._make_request(
@@ -276,15 +272,14 @@ def break_snapmirror(client, destination_path):
             time.sleep(5)
             attempt += 1
 
-        raise ValueError(f"Failed to break SnapMirror: state did not change to 'broken_off' after {max_attempts * 5} seconds")
+        raise ValueError("Failed to break SnapMirror within 120 seconds")
     except Exception as e:
         print(f"Error breaking SnapMirror: {str(e)}")
         print("Troubleshooting suggestions:")
-        print("- Verify the relationship is in 'snapmirrored' state before breaking")
-        print("- Check user permissions for SnapMirror operations")
-        print("- Ensure no active transfers, errors, or locks prevent the break")
-        print("- Confirm the destination volume is not in use or quiesced")
-        print("- Check ONTAP event logs for SnapMirror errors (event log show)")
+        print("- Verify API user permissions match CLI capabilities")
+        print("- Check ONTAP version and REST API support")
+        print("- Ensure no conflicting operations via CLI or other tools")
+        print("- Review ONTAP event logs (event log show)")
         logger.error(f"Failed to break SnapMirror: {str(e)}")
         return False
 

@@ -61,7 +61,6 @@ def validate_source_volume(client, svm_name, volume_name):
         return True
     except Exception as e:
         print(f"Error validating source volume: {str(e)}")
-        print("Please verify the SVM name and volume name are correct.")
         logger.error(f"Failed to validate source volume: {str(e)}")
         return False
 
@@ -73,21 +72,13 @@ def get_destination_path(client, source_path):
             'GET',
             f"snapmirror/relationships?source.path={source_path}&list_destinations_only=true&fields=destination.path"
         )
-        
         if not relationships.get('records'):
             raise ValueError(f"No SnapMirror relationship found for source path: {source_path}")
-        
         destination_path = relationships['records'][0]['destination']['path']
         print(f"Found destination path: {destination_path}")
         return destination_path
     except Exception as e:
         print(f"Error finding destination path: {str(e)}")
-        print("Troubleshooting suggestions:")
-        print("- Verify that a SnapMirror relationship exists for this source path")
-        print("- Check the source path format (should be <svm_name>:<volume_name>)")
-        print("- Ensure the source volume has a configured SnapMirror relationship")
-        print("- Confirm API access and permissions to the cluster")
-        print("- Validate the ONTAP version supports this API (9.6 or later)")
         logger.error(f"Failed to find destination path: {str(e)}")
         return None
 
@@ -98,12 +89,12 @@ def update_snapmirror(client, source_path, destination_path):
         print(f"Looking up SnapMirror relationship: {source_path} -> {destination_path}")
         relationships = client._make_request(
             'GET',
-            f"snapmirror/relationships?source.path={source_path}&destination.path={destination_path}&fields=uuid"
+            f"snapmirror/relationships?source.path={source_path}&destination.path={destination_path}&fields=uuid,state,transfer.state"
         )
         if not relationships.get('records'):
             raise ValueError("SnapMirror relationship not found")
         uuid = relationships['records'][0]['uuid']
-        print(f"Found relationship UUID: {uuid}")
+        print(f"Found relationship UUID: {uuid}, Initial state: {relationships['records'][0]['state']}")
 
         print("Initiating SnapMirror transfer...")
         client._make_request(
@@ -140,25 +131,25 @@ def update_snapmirror(client, source_path, destination_path):
         return False
 
 def quiesce_snapmirror(client, uuid):
-    """Quiesce the SnapMirror relationship"""
-    print("Quiescing SnapMirror relationship...")
+    """Quiesce the SnapMirror relationship using 'paused' state"""
+    print("Pausing (quiescing) SnapMirror relationship...")
     try:
         response = requests.patch(
             f"{client.base_url}/snapmirror/relationships/{uuid}",
             auth=client.auth,
             headers=client.headers,
-            json={"state": "quiesced"},
+            json={"state": "paused"},
             verify=client.verify_ssl
         )
         response.raise_for_status()
-        print(f"Quiesce request sent, response: {response.status_code} {response.text}")
-        logger.info("SnapMirror quiesce request sent")
+        print(f"Pause request sent, response: {response.status_code} {response.text}")
+        logger.info("SnapMirror pause request sent")
 
         job_info = response.json() if response.content else {}
         job_id = job_info.get('job', {}).get('uuid')
         
         if job_id:
-            print(f"Quiesce initiated as job {job_id}, monitoring job status...")
+            print(f"Pause initiated as job {job_id}, monitoring job status...")
             max_attempts = 24
             attempt = 0
             while attempt < max_attempts:
@@ -176,7 +167,7 @@ def quiesce_snapmirror(client, uuid):
                 attempt += 1
 
             if job_state == 'failure':
-                raise ValueError(f"Quiesce job failed: {job_desc} - {job_msg}")
+                raise ValueError(f"Pause job failed: {job_desc} - {job_msg}")
 
         max_attempts = 24
         attempt = 0
@@ -186,37 +177,38 @@ def quiesce_snapmirror(client, uuid):
                 f"snapmirror/relationships/{uuid}?fields=state"
             )
             current_state = status['state']
-            print(f"Current state after quiesce attempt: {current_state}")
-            if current_state == 'quiesced':
-                print("SnapMirror relationship quiesced successfully")
+            print(f"Current state after pause attempt: {current_state}")
+            if current_state == 'paused':
+                print("SnapMirror relationship paused successfully")
                 return True
             time.sleep(5)
             attempt += 1
 
-        raise ValueError("Failed to quiesce SnapMirror within 120 seconds")
+        raise ValueError("Failed to pause SnapMirror within 120 seconds")
     except Exception as e:
-        print(f"Error quiescing SnapMirror: {str(e)}")
-        logger.error(f"Failed to quiesce SnapMirror: {str(e)}")
+        print(f"Error pausing SnapMirror: {str(e)}")
+        logger.error(f"Failed to pause SnapMirror: {str(e)}")
         return False
 
 def break_snapmirror(client, destination_path):
-    """Break SnapMirror relationship with detailed debugging"""
+    """Break SnapMirror relationship after pausing"""
     print("Starting SnapMirror break operation...")
     try:
         print(f"Looking up SnapMirror relationship for destination: {destination_path}")
         relationships = client._make_request(
             'GET',
-            f"snapmirror/relationships?destination.path={destination_path}&fields=uuid,state"
+            f"snapmirror/relationships?destination.path={destination_path}&fields=uuid,state,transfer.state"
         )
         if not relationships.get('records'):
             raise ValueError("SnapMirror relationship not found")
         uuid = relationships['records'][0]['uuid']
         current_state = relationships['records'][0]['state']
-        print(f"Found relationship UUID: {uuid}, Current state: {current_state}")
+        transfer_state = relationships['records'][0].get('transfer', {}).get('state', 'none')
+        print(f"Found relationship UUID: {uuid}, Current state: {current_state}, Transfer state: {transfer_state}")
 
-        if current_state != 'quiesced':
+        if current_state != 'paused':
             if current_state != 'snapmirrored':
-                raise ValueError(f"Cannot break SnapMirror: current state is '{current_state}', must be 'snapmirrored' or 'quiesced'")
+                raise ValueError(f"Cannot break SnapMirror: current state is '{current_state}', must be 'snapmirrored' or 'paused'")
             if not quiesce_snapmirror(client, uuid):
                 return False
 
